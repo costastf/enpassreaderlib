@@ -2,6 +2,8 @@
 Contributing
 ============
 
+# Based on work shown at https://github.com/HazCod/enpass-cli/issues/16
+
 Contributions are welcome, and they are greatly appreciated! Every
 little bit helps, and credit will always be given.
 

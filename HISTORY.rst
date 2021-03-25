@@ -13,3 +13,9 @@ History
 ------------------
 
 * First release with basic required functionality.
+
+
+0.1.1 (25-03-2021)
+------------------
+
+* Loosely pinned dependencies and updated the usage and installation notes a bit.

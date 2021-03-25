@@ -65,4 +65,9 @@ Instead use the provided build and upload scripts that create all the necessary 
 Project Features
 ================
 
-* TODO
+See USAGE.rst.
+
+* Can retrieve single entries
+* Can iterate over all entries
+* Can do fuzzy matching of entries while searching
+

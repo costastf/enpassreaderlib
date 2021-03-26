@@ -54,7 +54,12 @@ extensions = [
     'sphinx.ext.todo'
 ]
 
-autodoc_mock_imports = ["pysqlcipher3"]
+autodoc_mock_imports = []
+try:
+    import pysqlcipher3
+except ImportError:
+    autodoc_mock_imports.append('pysqlcipher3')
+
 
 napoleon_google_docstring = True
 

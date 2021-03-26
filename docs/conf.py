@@ -54,6 +54,8 @@ extensions = [
     'sphinx.ext.todo'
 ]
 
+autodoc_mock_imports = ["pysqlcipher3"]
+
 napoleon_google_docstring = True
 
 # Add any paths that contain templates here, relative to this directory.

@@ -54,17 +54,17 @@ extensions = [
     'sphinx.ext.todo'
 ]
 
-
-on_rtd = os.environ.get('READTHEDOCS') == 'True'
-if on_rtd:
-    from pprint import pprint
-    pprint(os.environ)
-
-autodoc_mock_imports = []
-try:
-    import pysqlcipher3
-except ImportError:
-    autodoc_mock_imports.append('pysqlcipher3')
+autodoc_mock_imports = ['pysqlcipher3', 'pycryptodome']
+# on_rtd = os.environ.get('READTHEDOCS') == 'True'
+# if on_rtd:
+#     from pprint import pprint
+#     pprint(os.environ)
+#
+# autodoc_mock_imports = []
+# try:
+#     import pysqlcipher3
+# except ImportError:
+#     autodoc_mock_imports.append('pysqlcipher3')
 
 
 napoleon_google_docstring = True

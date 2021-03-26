@@ -54,6 +54,12 @@ extensions = [
     'sphinx.ext.todo'
 ]
 
+
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+if on_rtd:
+    from pprint import pprint
+    pprint(os.environ)
+
 autodoc_mock_imports = []
 try:
     import pysqlcipher3

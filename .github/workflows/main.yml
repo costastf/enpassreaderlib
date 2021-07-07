@@ -21,6 +21,9 @@ jobs:
         with:
           python-version: 3.7.10
 
+      - name: Install system dependencies for pysqlcipher3
+        run: sudo apt install sqlcipher libsqlcipher0 libsqlcipher-dev
+
       - name: Install pipenv
         run: pip install pipenv
 

@@ -31,8 +31,8 @@ Import all parts from enpassreaderlib here
 .. _Google Python Style Guide:
    http://google.github.io/styleguide/pyguide.html
 """
-from ._version import __version__
 from enpassreaderlib.enpassreaderlib import EnpassDB
+from ._version import __version__
 
 __author__ = '''Costas Tyfoxylos <costas.tyf@gmail.com>'''
 __docformat__ = '''google'''

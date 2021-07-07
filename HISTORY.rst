@@ -19,3 +19,9 @@ History
 ------------------
 
 * Loosely pinned dependencies and updated the usage and installation notes a bit.
+
+
+0.1.2 (07-07-2021)
+------------------
+
+* Added pipeline.

@@ -37,3 +37,9 @@ History
 ------------------
 
 * Fix linting.
+
+
+0.2.2 (02-03-2023)
+------------------
+
+* Fix for entries with no password.

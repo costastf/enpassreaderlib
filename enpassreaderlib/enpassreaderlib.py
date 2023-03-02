@@ -59,7 +59,7 @@ LOGGER = logging.getLogger(LOGGER_BASENAME)
 LOGGER.addHandler(logging.NullHandler())
 
 
-class EnpassDB:  # pylint: disable=too-many-instance-attributes
+class EnpassDB:
     """Manages the database object exposing useful methods to interact with it."""
 
     def __init__(self, database_path, password, keyfile=None, pbkdf2_rounds=100_000):
@@ -73,9 +73,19 @@ class EnpassDB:  # pylint: disable=too-many-instance-attributes
 
     @property
     def _retrieve_all_query(self):
-        return ('SELECT i.title, i.uuid, i.key, if.value, if.hash '
-                'FROM item i, itemfield if '
-                'WHERE if.type = \"password\" AND i.uuid = if.item_uuid')
+        field_types = ['password', 'totp']
+        return ('SELECT '
+                'i.title, '
+                'i.uuid, '
+                'i.key, '
+                'if_password.value as password_value, '
+                'if_password.hash as password_value_hash, '
+                'if_totp.value as totp_value, '
+                'if_totp.hash as totp_value_hash '
+                'FROM item i ' + ''.join([(f'LEFT JOIN '
+                                           f'(SELECT item_uuid, type, value, hash '
+                                           f'FROM itemfield WHERE type = "{type_}") if_{type_} '
+                                           f'ON i.uuid = if_{type_}.item_uuid ') for type_ in field_types]))
 
     @property
     def master_password(self):
@@ -88,7 +98,7 @@ class EnpassDB:  # pylint: disable=too-many-instance-attributes
         if self._master_password is None:
             if self._keyfile:
                 key_hex_xml = Path(self._keyfile).read_bytes()
-                key_bytes = binascii.unhexlify(key_hex_xml[slice(5, -6)])
+                key_bytes = binascii.unhexlify(key_hex_xml[slice(5, -6)])  # pylint: disable=c-extension-no-member
                 self._password = self._password + key_bytes
             self._master_password = self._password
         return self._master_password
@@ -103,7 +113,8 @@ class EnpassDB:  # pylint: disable=too-many-instance-attributes
         """
         if self._cipher_key is None:
             # The first 16 bytes of the database file are used as salt
-            enpass_db_salt = open(self._database_path, "rb").read(16)
+            with open(self._database_path, "rb") as db:
+                enpass_db_salt = db.read(16)
             # The database key is derived from the master password
             # and the database salt with 100k iterations of PBKDF2-HMAC-SHA512
             enpass_db_key = hashlib.pbkdf2_hmac("sha512", self.master_password, enpass_db_salt, self.pbkdf2_rounds)
@@ -151,7 +162,8 @@ class EnpassDB:  # pylint: disable=too-many-instance-attributes
             entry (Entry): A password entry object if match found else None.
 
         """
-        row = next((row for row in self._query(f'{self._retrieve_all_query} AND lower(i.title) = \"{name.lower()}\";')),
+        query = f'{self._retrieve_all_query} WHERE lower(i.title) = \"{name.lower()}\";'
+        row = next((row for row in self._query(query)),
                    None)
         if row is None:
             return row
@@ -167,11 +179,11 @@ class EnpassDB:  # pylint: disable=too-many-instance-attributes
             entries (list): A list of password entries matching the fuzzy search for the given name.
 
         """
-        query = f'{self._retrieve_all_query} AND lower(i.title) LIKE \"%{name.lower()}%\";'
+        query = f'{self._retrieve_all_query} WHERE lower(i.title) LIKE \"%{name.lower()}%\";'
         return [Entry(row) for row in self._query(query)]
 
 
-class Entry:  # pylint: disable=too-few-public-methods
+class Entry:
     """Models a password entry and exposes some useful attributes about it."""
 
     def __init__(self, database_row):
@@ -180,8 +192,11 @@ class Entry:  # pylint: disable=too-few-public-methods
         self.key = database_row["key"][:32]
         self.nonce = database_row["key"][32:]
         self.title = database_row["title"]
-        self.value = database_row["value"]
+        self._password_value = database_row["password_value"]
+        self._password_hash = database_row["password_value_hash"]
         self.uuid = database_row["uuid"]
+        self._totp_hash = database_row["totp_value_hash"]
+        self._totp = database_row["totp_value"]
         self.header = self.uuid.replace("-", "")
         self._password = None
 
@@ -196,10 +211,14 @@ class Entry:  # pylint: disable=too-few-public-methods
         if self._password is None:
             # The value object holds the ciphertext (same length as plaintext) +
             # (authentication) tag (16 bytes) and is stored in hex
-            ciphertext = bytearray.fromhex(self.value[:len(self.value) - 32])
+            ciphertext = bytearray.fromhex(self._password_value[:len(self._password_value) - 32])
             # Now we can initialize, decrypt the ciphertext and verify the AAD.
             # You can compare the SHA-1 output with the value stored in the db
             cipher = AES.new(self.key, AES.MODE_GCM, nonce=self.nonce)
             cipher.update(bytearray.fromhex(self.header))
             self._password = cipher.decrypt(ciphertext).decode("utf-8")
         return self._password
+
+    @property
+    def totp_seed(self):
+        return self._totp

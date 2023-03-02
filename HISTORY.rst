@@ -25,3 +25,9 @@ History
 ------------------
 
 * Added pipeline.
+
+
+0.2.0 (02-03-2023)
+------------------
+
+* Expose totp seeds for passwords that support it.

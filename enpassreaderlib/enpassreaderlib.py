@@ -98,7 +98,7 @@ class EnpassDB:
         if self._master_password is None:
             if self._keyfile:
                 key_hex_xml = Path(self._keyfile).read_bytes()
-                key_bytes = binascii.unhexlify(key_hex_xml[slice(5, -6)])  # pylint: disable=c-extension-no-member
+                key_bytes = binascii.unhexlify(key_hex_xml[slice(5, -6)])
                 self._password = self._password + key_bytes
             self._master_password = self._password
         return self._master_password

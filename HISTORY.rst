@@ -31,3 +31,9 @@ History
 ------------------
 
 * Expose totp seeds for passwords that support it.
+
+
+0.2.1 (02-03-2023)
+------------------
+
+* Fix linting.

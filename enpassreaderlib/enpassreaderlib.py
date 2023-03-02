@@ -211,7 +211,12 @@ class Entry:
         if self._password is None:
             # The value object holds the ciphertext (same length as plaintext) +
             # (authentication) tag (16 bytes) and is stored in hex
-            ciphertext = bytearray.fromhex(self._password_value[:len(self._password_value) - 32])
+            try:
+                ciphertext = bytearray.fromhex(self._password_value[:len(self._password_value) - 32])
+            except TypeError:
+                LOGGER.warning(f'Entry with title :{self.title} and '
+                               f'uuid :{self.uuid} does not seem to have a password.')
+                return None
             # Now we can initialize, decrypt the ciphertext and verify the AAD.
             # You can compare the SHA-1 output with the value stored in the db
             cipher = AES.new(self.key, AES.MODE_GCM, nonce=self.nonce)

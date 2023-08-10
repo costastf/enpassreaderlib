@@ -55,3 +55,9 @@ History
 ------------------
 
 * Fix pipeline with required dependencies for upload.
+
+
+0.2.5 (10-08-2023)
+------------------
+
+* Remove debugging logging.

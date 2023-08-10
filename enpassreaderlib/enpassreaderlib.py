@@ -62,7 +62,7 @@ LOGGER.addHandler(logging.NullHandler())
 class EnpassDB:
     """Manages the database object exposing useful methods to interact with it."""
 
-    def __init__(self, database_path, password, keyfile=None, pbkdf2_rounds=100_000):
+    def __init__(self, database_path, password, keyfile=None, pbkdf2_rounds=320_000):
         self._database_path = database_path
         self._password = password.encode('utf-8')
         self._keyfile = keyfile
@@ -132,6 +132,7 @@ class EnpassDB:
             cursor.execute('PRAGMA cipher_compatibility = 3;')
             cursor.execute('SELECT * FROM Identity;').fetchone()
         except sqlite.DatabaseError:
+            LOGGER.exception('shit!')
             raise EnpassDatabaseError('Either the master password or the key file provided cannot decrypt '
                                       'the database, or it is not a valid enpass 6 encrypted database.') from None
         return connection, cursor

@@ -132,7 +132,6 @@ class EnpassDB:
             cursor.execute('PRAGMA cipher_compatibility = 3;')
             cursor.execute('SELECT * FROM Identity;').fetchone()
         except sqlite.DatabaseError:
-            LOGGER.exception('shit!')
             raise EnpassDatabaseError('Either the master password or the key file provided cannot decrypt '
                                       'the database, or it is not a valid enpass 6 encrypted database,'
                                       'or the pbkdf2_rounds is not correct. '

@@ -98,7 +98,7 @@ class EnpassDB:
         if self._master_password is None:
             if self._keyfile:
                 key_hex_xml = Path(self._keyfile).read_bytes()
-                key_bytes = binascii.unhexlify(key_hex_xml[slice(5, -6)])
+                key_bytes = binascii.unhexlify(key_hex_xml[slice(5, -6)])  # noqa
                 self._password = self._password + key_bytes
             self._master_password = self._password
         return self._master_password
@@ -134,7 +134,9 @@ class EnpassDB:
         except sqlite.DatabaseError:
             LOGGER.exception('shit!')
             raise EnpassDatabaseError('Either the master password or the key file provided cannot decrypt '
-                                      'the database, or it is not a valid enpass 6 encrypted database.') from None
+                                      'the database, or it is not a valid enpass 6 encrypted database,'
+                                      'or the pbkdf2_rounds is not correct. '
+                                      f'The pbkdf2_rounds currently set is {self.pbkdf2_rounds}') from None
         return connection, cursor
 
     def _query(self, query):

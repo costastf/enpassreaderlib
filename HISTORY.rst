@@ -49,3 +49,9 @@ History
 ------------------
 
 * Update to latest default configured pbkdf2 rounds.
+
+
+0.2.4 (10-08-2023)
+------------------
+
+* Fix pipeline with required dependencies for upload.

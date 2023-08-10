@@ -43,3 +43,9 @@ History
 ------------------
 
 * Fix for entries with no password.
+
+
+0.2.3 (10-08-2023)
+------------------
+
+* Update to latest default configured pbkdf2 rounds.

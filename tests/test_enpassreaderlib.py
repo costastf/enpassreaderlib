@@ -264,6 +264,28 @@ class TestEnpassDBFields(TestCase):
             self.assertEqual(entry.field_labels, ['Password', 'One time code', 'Username'])
         self.assertIsNone(enpass.get_entry('missing'))
 
+    def test_database_is_opened_read_only(self):
+        """The database cannot be modified through the connection of the library."""
+        enpass = EnpassDB(self.database_path, self.password, pbkdf2_rounds=self.rounds)
+        with self.assertRaises(sqlite.OperationalError):
+            enpass._connection.execute('DELETE FROM item;')  # noqa
+
+    def test_missing_database_is_not_created(self):
+        """A database path that does not exist raises and no file is created in its place."""
+        missing_path = os.path.join(self.directory.name, 'missing.enpassdb')
+        with self.assertRaises(EnpassDatabaseError):
+            EnpassDB(missing_path, self.password, pbkdf2_rounds=self.rounds)
+        self.assertFalse(os.path.exists(missing_path))
+
+    def test_path_with_uri_characters_is_opened(self):
+        """A database path containing characters with meaning in uris is opened as is."""
+        directory = os.path.join(self.directory.name, 'odd ?#% name')
+        os.mkdir(directory)
+        database_path = os.path.join(directory, 'vault.enpassdb')
+        os.rename(self.database_path, database_path)
+        enpass = EnpassDB(database_path, self.password, pbkdf2_rounds=self.rounds)
+        self.assertEqual(enpass.get_entry('mail').password, 's3cret')
+
     def test_names_are_not_interpreted_as_sql(self):
         """Names containing sql or like pattern syntax are matched literally."""
         enpass = EnpassDB(self.database_path, self.password, pbkdf2_rounds=self.rounds)

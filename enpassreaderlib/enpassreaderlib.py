@@ -125,8 +125,13 @@ class EnpassDB:
         return self._cipher_key
 
     def _authenticate(self):
+        database_path = Path(self._database_path)
+        if not database_path.is_file():
+            raise EnpassDatabaseError(f'The database file {database_path} does not exist.')
+        # Opened read only so the vault can never be created or modified by the library
+        database_uri = f'{database_path.resolve().as_uri()}?mode=ro'
         try:
-            connection = sqlite.connect(self._database_path)
+            connection = sqlite.connect(database_uri, uri=True)
             cursor = connection.cursor()
             cursor.row_factory = sqlite.Row
             cursor.execute(f"PRAGMA key=\"x'{self.cipher_key}'\";")

@@ -85,7 +85,7 @@ class EnpassDB:
                 'if_totp.sensitive as totp_value_sensitive '
                 'FROM item i ' + ''.join([(f'LEFT JOIN '
                                            f'(SELECT item_uuid, type, value, hash, sensitive '
-                                           f'FROM itemfield WHERE type = "{type_}") if_{type_} '
+                                           f"FROM itemfield WHERE type = '{type_}') if_{type_} "
                                            f'ON i.uuid = if_{type_}.item_uuid ') for type_ in field_types]))
 
     @property

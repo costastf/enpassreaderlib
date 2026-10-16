@@ -240,6 +240,7 @@ class TestEnpassDBFields(TestCase):
         self.database_path = os.path.join(self.directory.name, 'vault.enpassdb')
         salt = os.urandom(16)
         key = hashlib.pbkdf2_hmac('sha512', self.password.encode('utf-8'), salt, self.rounds).hex()[:64]
+        self.cipher_key = key
         self.item_key = os.urandom(32) + os.urandom(12)
         self.uuid = str(uuid.uuid4())
         connection = sqlite.connect(self.database_path)
@@ -320,6 +321,20 @@ class TestEnpassDBFields(TestCase):
         enpass.close()
         with self.assertRaises(sqlite.ProgrammingError):
             enpass.get_entry('mail')
+
+    def test_field_types_are_compared_as_strings(self):
+        """Field types in the entries query are string literals, not identifiers that a column could shadow."""
+        connection = sqlite.connect(self.database_path)
+        connection.execute(f"PRAGMA key=\"x'{self.cipher_key}'\";")
+        connection.execute('PRAGMA cipher_compatibility = 3;')
+        connection.execute('ALTER TABLE itemfield ADD COLUMN password TEXT;')
+        connection.execute('ALTER TABLE itemfield ADD COLUMN totp TEXT;')
+        connection.commit()
+        connection.close()
+        enpass = EnpassDB(self.database_path, self.password, pbkdf2_rounds=self.rounds)
+        entry = enpass.get_entry('mail')
+        self.assertEqual(entry.password, 's3cret')
+        self.assertEqual(entry.totp_seed, 'JBSWY3DPEHPK3PXP')
 
     def test_names_are_not_interpreted_as_sql(self):
         """Names containing sql or like pattern syntax are matched literally."""

@@ -34,13 +34,14 @@ Main code for enpassreaderlib.
 import binascii
 import hashlib
 import logging
+import re
 
 from pathlib import Path
 
 from Crypto.Cipher import AES
 from sqlcipher3 import dbapi2 as sqlite
 
-from .enpassreaderlibexceptions import EnpassDatabaseError, EnpassDecryptionError
+from .enpassreaderlibexceptions import EnpassDatabaseError, EnpassDecryptionError, EnpassKeyfileError
 
 __author__ = '''Costas Tyfoxylos <costas.tyf@gmail.com>'''
 __docformat__ = '''google'''
@@ -95,11 +96,20 @@ class EnpassDB:
         Returns:
             master_password (bytearray): The master password to decrypt the database.
 
+        Raises:
+            EnpassKeyfileError: If the key file does not hold a hex encoded key in the enpass format.
+
         """
         if self._master_password is None:
             if self._keyfile:
                 key_hex_xml = Path(self._keyfile).read_bytes()
-                key_bytes = binascii.unhexlify(key_hex_xml[slice(5, -6)])  # noqa
+                # The key file holds the hex encoded key in a <key> element, possibly surrounded by
+                # an xml declaration and whitespace
+                match = re.search(rb'<key>\s*([0-9a-fA-F]+)\s*</key>', key_hex_xml)
+                try:
+                    key_bytes = binascii.unhexlify(match.group(1))
+                except (AttributeError, binascii.Error):
+                    raise EnpassKeyfileError(f'The key file {self._keyfile} does not hold a valid key.') from None
                 self._password = self._password + key_bytes
             self._master_password = self._password
         return self._master_password
@@ -130,12 +140,14 @@ class EnpassDB:
             raise EnpassDatabaseError(f'The database file {database_path} does not exist.')
         # Opened read only so the vault can never be created or modified by the library
         database_uri = f'{database_path.resolve().as_uri()}?mode=ro'
+        # Derived before connecting so an invalid key file cannot leave a connection open
+        cipher_key = self.cipher_key
         connection = None
         try:
             connection = sqlite.connect(database_uri, uri=True)
             cursor = connection.cursor()
             cursor.row_factory = sqlite.Row
-            cursor.execute(f"PRAGMA key=\"x'{self.cipher_key}'\";")
+            cursor.execute(f"PRAGMA key=\"x'{cipher_key}'\";")
             cursor.execute('PRAGMA cipher_compatibility = 3;')
             cursor.execute('SELECT * FROM Identity;').fetchone()
         except sqlite.DatabaseError:

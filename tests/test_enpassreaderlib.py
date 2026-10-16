@@ -45,7 +45,9 @@ from sqlcipher3 import dbapi2 as sqlite
 
 from enpassreaderlib import EnpassDB
 from enpassreaderlib.enpassreaderlib import Entry
-from enpassreaderlib.enpassreaderlibexceptions import EnpassDatabaseError, EnpassDecryptionError
+from enpassreaderlib.enpassreaderlibexceptions import (EnpassDatabaseError,
+                                                       EnpassDecryptionError,
+                                                       EnpassKeyfileError)
 
 __author__ = '''Costas Tyfoxylos <costas.tyf@gmail.com>'''
 __docformat__ = '''google'''
@@ -248,11 +250,17 @@ class TestEnpassDBFields(TestCase):
         """Creates an sqlcipher database with the enpass layout encrypted the way enpass does."""
         self.directory = tempfile.TemporaryDirectory()
         self.database_path = os.path.join(self.directory.name, 'vault.enpassdb')
-        salt = os.urandom(16)
-        key = hashlib.pbkdf2_hmac('sha512', self.password.encode('utf-8'), salt, self.rounds).hex()[:64]
-        self.cipher_key = key
         self.item_key = os.urandom(32) + os.urandom(12)
         self.uuid = str(uuid.uuid4())
+        self.create_database(self.password.encode('utf-8'))
+
+    def create_database(self, master_password):
+        """Creates the database at the database path, replacing any existing one, keyed with the master password."""
+        if os.path.exists(self.database_path):
+            os.remove(self.database_path)
+        salt = os.urandom(16)
+        key = hashlib.pbkdf2_hmac('sha512', master_password, salt, self.rounds).hex()[:64]
+        self.cipher_key = key
         connection = sqlite.connect(self.database_path)
         # A raw key followed by a salt makes sqlcipher write that salt as the first 16 bytes of the file
         connection.execute(f"PRAGMA key=\"x'{key}{salt.hex()}'\";")
@@ -345,6 +353,41 @@ class TestEnpassDBFields(TestCase):
         entry = enpass.get_entry('mail')
         self.assertEqual(entry.password, 's3cret')
         self.assertEqual(entry.totp_seed, 'JBSWY3DPEHPK3PXP')
+
+    def write_keyfile(self, content):
+        """Writes a key file with the content provided and returns its path."""
+        keyfile = os.path.join(self.directory.name, 'vault.enpasskey')
+        with open(keyfile, 'wb') as file:
+            file.write(content)
+        return keyfile
+
+    def test_keyfile_layouts_are_accepted(self):
+        """Key files with an xml declaration, whitespace or trailing newlines decrypt the database."""
+        key = os.urandom(32)
+        self.create_database(self.password.encode('utf-8') + key)
+        layouts = [b'<key>%s</key>',
+                   b'<key>%s</key>\n',
+                   b'<?xml version="1.0" encoding="UTF-8"?>\n<key>\n  %s\n</key>\r\n']
+        for layout in layouts:
+            keyfile = self.write_keyfile(layout % key.hex().encode())
+            enpass = EnpassDB(self.database_path, self.password, keyfile=keyfile, pbkdf2_rounds=self.rounds)
+            self.assertEqual(enpass.get_entry('mail').password, 's3cret')
+            enpass.close()
+
+    def test_invalid_keyfile_raises(self):
+        """A key file without a hex encoded key raises EnpassKeyfileError."""
+        for content in (b'', b'not a key', b'<key>not hex</key>', b'<key>abc</key>'):
+            keyfile = self.write_keyfile(content)
+            with self.assertRaises(EnpassKeyfileError):
+                EnpassDB(self.database_path, self.password, keyfile=keyfile, pbkdf2_rounds=self.rounds)
+
+    def test_connection_is_not_opened_for_invalid_keyfile(self):
+        """An invalid key file is rejected before any connection to the database is opened."""
+        keyfile = self.write_keyfile(b'not a key')
+        with mock.patch('enpassreaderlib.enpassreaderlib.sqlite.connect') as connect:
+            with self.assertRaises(EnpassKeyfileError):
+                EnpassDB(self.database_path, self.password, keyfile=keyfile, pbkdf2_rounds=self.rounds)
+        connect.assert_not_called()
 
     def test_names_are_not_interpreted_as_sql(self):
         """Names containing sql or like pattern syntax are matched literally."""

@@ -48,3 +48,7 @@ class EnpassDatabaseError(Exception):
 
 class EnpassDecryptionError(Exception):
     """An encrypted value of an entry failed authentication and cannot be trusted."""
+
+
+class EnpassKeyfileError(Exception):
+    """The key file provided does not hold a hex encoded key in the enpass format."""

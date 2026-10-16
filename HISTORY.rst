@@ -73,3 +73,15 @@ History
 ------------------
 
 * Fix for sql injection.
+
+
+0.4.1 (16-10-2026)
+------------------
+
+* Verify the gcm authentication tag when decrypting values, tampered values raise EnpassDecryptionError.
+* Open the database read only and stop creating an empty file for a missing path.
+* Close the database connection, with close and context manager support.
+* Quote field types as sql string literals in the entries query.
+* Leave entry titles out of the missing password warning.
+* Parse key files by their key element, invalid key files raise EnpassKeyfileError.
+* Skip items without a key when listing entries.

@@ -309,8 +309,8 @@ class Entry:
         """
         if self._password is None:
             if self._password_value is None:
-                LOGGER.warning(f'Entry with title :{self.title} and '
-                               f'uuid :{self.uuid} does not seem to have a password.')
+                # The title is left out as it can reveal what the entry is for to whoever reads the logs
+                LOGGER.warning(f'Entry with uuid :{self.uuid} does not seem to have a password.')
                 return None
             self._password = self._decrypt(self._password_value)
         return self._password

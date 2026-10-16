@@ -140,6 +140,16 @@ class TestEntry(TestCase):
         entry = Entry(self.row(None))
         self.assertIsNone(entry.password)
 
+    def test_missing_password_log_omits_title(self):
+        """The warning for an entry without a password names it by uuid and not by title."""
+        row = self.row(None)
+        row['title'] = 'Bank of Secrets'
+        entry = Entry(row)
+        with self.assertLogs('enpassreaderlib', level='WARNING') as logs:
+            _ = entry.password
+        self.assertIn(self.uuid, logs.output[0])
+        self.assertNotIn(entry.title, logs.output[0])
+
     def test_sensitive_totp_seed_is_decrypted(self):
         """A totp seed stored in a sensitive field is decrypted with the key of the entry."""
         entry = Entry(self.row(None, self.encrypt('JBSWY3DPEHPK3PXP'), totp_sensitive=1))

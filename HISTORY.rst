@@ -67,3 +67,9 @@ History
 ------------------
 
 * Exposed more fields of an entry. Bumped minimum python version and dependencies.
+
+
+0.4.0 (16-10-2026)
+------------------
+
+* Fix for sql injection.

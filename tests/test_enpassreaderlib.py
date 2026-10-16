@@ -45,7 +45,7 @@ from sqlcipher3 import dbapi2 as sqlite
 
 from enpassreaderlib import EnpassDB
 from enpassreaderlib.enpassreaderlib import Entry
-from enpassreaderlib.enpassreaderlibexceptions import EnpassDatabaseError
+from enpassreaderlib.enpassreaderlibexceptions import EnpassDatabaseError, EnpassDecryptionError
 
 __author__ = '''Costas Tyfoxylos <costas.tyf@gmail.com>'''
 __docformat__ = '''google'''
@@ -135,6 +135,44 @@ class TestEntry(TestCase):
         """An entry without a totp seed returns None."""
         entry = Entry(self.row(None))
         self.assertIsNone(entry.totp_seed)
+
+    def tamper(self, value, position):
+        """Flips the bits of the hex digit at the position of an encrypted value."""
+        return f'{value[:position]}{int(value[position], 16) ^ 0xf:x}{value[position + 1:]}'
+
+    def test_tampered_ciphertext_is_rejected(self):
+        """A password whose ciphertext has been modified fails authentication."""
+        entry = Entry(self.row(self.tamper(self.encrypt('s3cret'), 0)))
+        with self.assertRaises(EnpassDecryptionError):
+            _ = entry.password
+
+    def test_tampered_tag_is_rejected(self):
+        """A password whose authentication tag has been modified fails authentication."""
+        entry = Entry(self.row(self.tamper(self.encrypt('s3cret'), -1)))
+        with self.assertRaises(EnpassDecryptionError):
+            _ = entry.password
+
+    def test_value_of_another_entry_is_rejected(self):
+        """A value moved from another entry fails authentication against the uuid of this entry."""
+        value = self.encrypt('s3cret')
+        self.uuid = str(uuid.uuid4())
+        entry = Entry(self.row(value))
+        with self.assertRaises(EnpassDecryptionError):
+            _ = entry.password
+
+    def test_truncated_value_is_rejected(self):
+        """A value too short to hold an authentication tag fails authentication."""
+        entry = Entry(self.row(self.encrypt('s3cret')[-20:]))
+        with self.assertRaises(EnpassDecryptionError):
+            _ = entry.password
+
+    def test_tampered_sensitive_field_is_rejected(self):
+        """A sensitive field whose value has been modified fails authentication."""
+        field_row = self.field_row('Password', 'password', 's3cret', sensitive=True)
+        field_row['value'] = self.tamper(field_row['value'], 0)
+        entry = Entry(self.row(None), [field_row])
+        with self.assertRaises(EnpassDecryptionError):
+            entry.get_field('password')
 
     def field_row(self, label, type_, value, sensitive=False):
         """Builds a row as returned by the fields query."""

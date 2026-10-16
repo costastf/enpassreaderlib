@@ -40,7 +40,7 @@ from pathlib import Path
 from Crypto.Cipher import AES
 from sqlcipher3 import dbapi2 as sqlite
 
-from .enpassreaderlibexceptions import EnpassDatabaseError
+from .enpassreaderlibexceptions import EnpassDatabaseError, EnpassDecryptionError
 
 __author__ = '''Costas Tyfoxylos <costas.tyf@gmail.com>'''
 __docformat__ = '''google'''
@@ -302,17 +302,23 @@ class Entry:
         Returns:
             plaintext (str): The decrypted value, None if no value is provided.
 
+        Raises:
+            EnpassDecryptionError: If the value fails authentication against its tag.
+
         """
         if value is None:
             return None
         # The value object holds the ciphertext (same length as plaintext) +
         # (authentication) tag (16 bytes) and is stored in hex
-        ciphertext = bytearray.fromhex(value[:len(value) - 32])
-        # Now we can initialize, decrypt the ciphertext and verify the AAD.
-        # You can compare the SHA-1 output with the value stored in the db
-        cipher = AES.new(self.key, AES.MODE_GCM, nonce=self.nonce)
-        cipher.update(bytearray.fromhex(self.header))
-        return cipher.decrypt(ciphertext).decode("utf-8")
+        try:
+            ciphertext = bytes.fromhex(value[:-32])
+            tag = bytes.fromhex(value[-32:])
+            cipher = AES.new(self.key, AES.MODE_GCM, nonce=self.nonce)
+            cipher.update(bytes.fromhex(self.header))
+            # Decrypting and verifying the tag together rejects any value that has been tampered with
+            return cipher.decrypt_and_verify(ciphertext, tag).decode("utf-8")
+        except ValueError:
+            raise EnpassDecryptionError(f'Value of entry with uuid :{self.uuid} failed authentication.') from None
 
     @property
     def totp_seed(self):

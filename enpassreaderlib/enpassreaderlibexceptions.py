@@ -44,3 +44,7 @@ __status__ = '''Development'''  # "Prototype", "Development", "Production".
 
 class EnpassDatabaseError(Exception):
     """The database is not a valid enpass 6 database or master password or key provided cannot decrypt it."""
+
+
+class EnpassDecryptionError(Exception):
+    """An encrypted value of an entry failed authentication and cannot be trusted."""

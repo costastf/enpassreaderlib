@@ -21,9 +21,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install system dependencies for pysqlcipher3
-        run: sudo apt install sqlcipher libsqlcipher0 libsqlcipher-dev
-
       - name: Install pipenv
         run: pip install pipenv
 
@@ -53,9 +50,6 @@ jobs:
 
       - name: Install pipenv
         run: pip install pipenv
-
-      - name: Install system dependencies for pysqlcipher3
-        run: sudo apt install sqlcipher libsqlcipher0 libsqlcipher-dev
 
       - name: Upload
         run: _CI/scripts/upload.py

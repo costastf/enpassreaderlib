@@ -7,5 +7,5 @@
 #
 # Please use Pipfile to update the requirements.
 #
-pysqlcipher3>=1.2.0 ; python_version >= '3.3'
+sqlcipher3>=0.6.4 ; python_version >= '3.9'
 pycryptodome>=4.0.0 ; python_version >= '3.9'

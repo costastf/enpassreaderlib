@@ -38,7 +38,7 @@ import logging
 from pathlib import Path
 
 from Crypto.Cipher import AES
-from pysqlcipher3 import dbapi2 as sqlite
+from sqlcipher3 import dbapi2 as sqlite
 
 from .enpassreaderlibexceptions import EnpassDatabaseError
 

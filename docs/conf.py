@@ -46,7 +46,7 @@ class Mock(MagicMock):
     def __getattr__(cls, name):
             return MagicMock()
 
-MOCK_MODULES = ['pysqlcipher3', 'pycryptodome']
+MOCK_MODULES = ['sqlcipher3', 'pycryptodome']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 import enpassreaderlib
@@ -65,7 +65,7 @@ extensions = [
     'sphinx.ext.todo'
 ]
 
-# autodoc_mock_imports = ['pysqlcipher3', 'pycryptodome']
+# autodoc_mock_imports = ['sqlcipher3', 'pycryptodome']
 # on_rtd = os.environ.get('READTHEDOCS') == 'True'
 # if on_rtd:
 #     from pprint import pprint
@@ -73,9 +73,9 @@ extensions = [
 #
 # autodoc_mock_imports = []
 # try:
-#     import pysqlcipher3
+#     import sqlcipher3
 # except ImportError:
-#     autodoc_mock_imports.append('pysqlcipher3')
+#     autodoc_mock_imports.append('sqlcipher3')
 
 
 napoleon_google_docstring = True

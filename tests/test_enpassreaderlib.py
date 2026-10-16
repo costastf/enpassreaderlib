@@ -37,7 +37,7 @@ import hashlib
 import os
 import tempfile
 import uuid
-from unittest import TestCase
+from unittest import TestCase, mock
 
 from betamax.fixtures import unittest
 from Crypto.Cipher import AES
@@ -75,6 +75,25 @@ class TestEnpassreaderlib(unittest.BetamaxTestCase):
         This is where you should tear down what you've setup in setUp before. This method is called after every test.
         """
         pass
+
+    def test_connection_is_closed_when_authentication_fails(self):
+        """The connection opened for a database that cannot be decrypted is closed."""
+        connections = []
+        sqlite_connect = sqlite.connect
+
+        def connect(*args, **kwargs):
+            connections.append(sqlite_connect(*args, **kwargs))
+            return connections[-1]
+
+        with tempfile.NamedTemporaryFile(suffix='.db') as database:
+            database.write(b'not an enpass database' * 64)
+            database.flush()
+            with mock.patch('enpassreaderlib.enpassreaderlib.sqlite.connect', side_effect=connect):
+                with self.assertRaises(EnpassDatabaseError):
+                    EnpassDB(database.name, 'password', pbkdf2_rounds=1)
+        self.assertEqual(len(connections), 1)
+        with self.assertRaises(sqlite.ProgrammingError):
+            connections[0].execute('SELECT 1;')
 
     def test_invalid_database_raises(self):
         """A file that is not an enpass database raises EnpassDatabaseError."""
@@ -285,6 +304,22 @@ class TestEnpassDBFields(TestCase):
         os.rename(self.database_path, database_path)
         enpass = EnpassDB(database_path, self.password, pbkdf2_rounds=self.rounds)
         self.assertEqual(enpass.get_entry('mail').password, 's3cret')
+
+    def test_context_manager_closes_connection(self):
+        """Leaving the context closes the connection and retrieved entries remain usable."""
+        with EnpassDB(self.database_path, self.password, pbkdf2_rounds=self.rounds) as enpass:
+            entry = enpass.get_entry('mail')
+        with self.assertRaises(sqlite.ProgrammingError):
+            enpass.entries  # noqa
+        self.assertEqual(entry.password, 's3cret')
+        self.assertEqual(entry.get_field('username'), 'costas')
+
+    def test_close_closes_connection(self):
+        """Closing the database prevents further queries."""
+        enpass = EnpassDB(self.database_path, self.password, pbkdf2_rounds=self.rounds)
+        enpass.close()
+        with self.assertRaises(sqlite.ProgrammingError):
+            enpass.get_entry('mail')
 
     def test_names_are_not_interpreted_as_sql(self):
         """Names containing sql or like pattern syntax are matched literally."""

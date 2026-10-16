@@ -130,6 +130,7 @@ class EnpassDB:
             raise EnpassDatabaseError(f'The database file {database_path} does not exist.')
         # Opened read only so the vault can never be created or modified by the library
         database_uri = f'{database_path.resolve().as_uri()}?mode=ro'
+        connection = None
         try:
             connection = sqlite.connect(database_uri, uri=True)
             cursor = connection.cursor()
@@ -138,11 +139,27 @@ class EnpassDB:
             cursor.execute('PRAGMA cipher_compatibility = 3;')
             cursor.execute('SELECT * FROM Identity;').fetchone()
         except sqlite.DatabaseError:
+            if connection is not None:
+                connection.close()
             raise EnpassDatabaseError('Either the master password or the key file provided cannot decrypt '
                                       'the database, or it is not a valid enpass 6 encrypted database,'
                                       'or the pbkdf2_rounds is not correct. '
                                       f'The pbkdf2_rounds currently set is {self.pbkdf2_rounds}') from None
         return connection, cursor
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def close(self):
+        """Closes the connection to the database.
+
+        Entries already retrieved remain usable after the database is closed.
+
+        """
+        self._connection.close()
 
     def _query(self, query, parameters=()):
         self._cursor.execute(query, parameters)

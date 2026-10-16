@@ -177,7 +177,7 @@ class EnpassDB:
         self._cursor.execute(query, parameters)
         # If you deleted an item from Enpass, it stays in the database, but the
         # entries are cleared so only entries with nonce are valid entries
-        return [row for row in self._cursor if row["key"][32:]]
+        return [row for row in self._cursor if row["key"] and row["key"][32:]]
 
     def _get_field_rows(self, rows):
         """Retrieves the fields of the items of the rows provided grouped by item uuid.

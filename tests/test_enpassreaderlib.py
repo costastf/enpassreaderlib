@@ -340,15 +340,20 @@ class TestEnpassDBFields(TestCase):
         with self.assertRaises(sqlite.ProgrammingError):
             enpass.get_entry('mail')
 
-    def test_field_types_are_compared_as_strings(self):
-        """Field types in the entries query are string literals, not identifiers that a column could shadow."""
+    def modify_database(self, *statements):
+        """Executes the statements against the database and commits them."""
         connection = sqlite.connect(self.database_path)
         connection.execute(f"PRAGMA key=\"x'{self.cipher_key}'\";")
         connection.execute('PRAGMA cipher_compatibility = 3;')
-        connection.execute('ALTER TABLE itemfield ADD COLUMN password TEXT;')
-        connection.execute('ALTER TABLE itemfield ADD COLUMN totp TEXT;')
+        for statement in statements:
+            connection.execute(statement)
         connection.commit()
         connection.close()
+
+    def test_field_types_are_compared_as_strings(self):
+        """Field types in the entries query are string literals, not identifiers that a column could shadow."""
+        self.modify_database('ALTER TABLE itemfield ADD COLUMN password TEXT;',
+                             'ALTER TABLE itemfield ADD COLUMN totp TEXT;')
         enpass = EnpassDB(self.database_path, self.password, pbkdf2_rounds=self.rounds)
         entry = enpass.get_entry('mail')
         self.assertEqual(entry.password, 's3cret')
@@ -388,6 +393,15 @@ class TestEnpassDBFields(TestCase):
             with self.assertRaises(EnpassKeyfileError):
                 EnpassDB(self.database_path, self.password, keyfile=keyfile, pbkdf2_rounds=self.rounds)
         connect.assert_not_called()
+
+    def test_items_without_key_are_skipped(self):
+        """Items with a NULL or cleared key are left out instead of failing the whole query."""
+        self.modify_database(f"INSERT INTO item VALUES ('{uuid.uuid4()}', 'Null key', NULL);",
+                             f"INSERT INTO item VALUES ('{uuid.uuid4()}', 'Cleared key', x'');")
+        enpass = EnpassDB(self.database_path, self.password, pbkdf2_rounds=self.rounds)
+        self.assertEqual([entry.title for entry in enpass.entries], ['Mail'])
+        self.assertIsNone(enpass.get_entry('null key'))
+        self.assertEqual([entry.title for entry in enpass.search_entries('key')], [])
 
     def test_names_are_not_interpreted_as_sql(self):
         """Names containing sql or like pattern syntax are matched literally."""

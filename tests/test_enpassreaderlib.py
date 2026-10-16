@@ -33,6 +33,7 @@ Tests for `enpassreaderlib` module.
 
 """
 
+import hashlib
 import os
 import tempfile
 import uuid
@@ -40,6 +41,7 @@ from unittest import TestCase
 
 from betamax.fixtures import unittest
 from Crypto.Cipher import AES
+from sqlcipher3 import dbapi2 as sqlite
 
 from enpassreaderlib import EnpassDB
 from enpassreaderlib.enpassreaderlib import Entry
@@ -117,3 +119,90 @@ class TestEntry(TestCase):
         """An entry without a password returns None."""
         entry = Entry(self.row(None))
         self.assertIsNone(entry.password)
+
+    def field_row(self, label, type_, value, sensitive=False):
+        """Builds a row as returned by the fields query."""
+        return {'item_uuid': self.uuid,
+                'label': label,
+                'type': type_,
+                'value': self.encrypt(value) if sensitive else value,
+                'sensitive': int(sensitive)}
+
+    def test_fields(self):
+        """Fields are retrieved by label or type and sensitive ones are decrypted."""
+        field_rows = [self.field_row('Username', 'username', 'costas'),
+                      self.field_row('Password', 'password', 's3cret', sensitive=True),
+                      self.field_row('Website', 'url', 'https://one.example'),
+                      self.field_row('Backup site', 'url', 'https://two.example'),
+                      self.field_row('Security answer', 'text', 'blue', sensitive=True)]
+        entry = Entry(self.row(None), field_rows)
+        self.assertEqual(entry.field_labels,
+                         ['Username', 'Password', 'Website', 'Backup site', 'Security answer'])
+        self.assertEqual(entry.get_field('username'), 'costas')
+        self.assertEqual(entry.get_field('PASSWORD'), 's3cret')
+        self.assertEqual(entry.get_field('security answer'), 'blue')
+        self.assertEqual(entry.get_field('url'), 'https://one.example')
+        self.assertEqual(entry.get_fields('url'), ['https://one.example', 'https://two.example'])
+        self.assertEqual(entry.get_field('backup site'), 'https://two.example')
+        self.assertIsNone(entry.get_field('missing'))
+        self.assertEqual(entry.get_fields('missing'), [])
+
+    def test_label_takes_precedence_over_type(self):
+        """A field whose label matches is preferred over one whose type matches."""
+        field_rows = [self.field_row('Primary', 'email', 'one@example.com'),
+                      self.field_row('Email', 'text', 'two@example.com')]
+        entry = Entry(self.row(None), field_rows)
+        self.assertEqual(entry.get_field('email'), 'two@example.com')
+        self.assertEqual(entry.get_fields('email'), ['two@example.com'])
+
+
+class TestEnpassDBFields(TestCase):
+
+    password = 'master password'
+    rounds = 1000
+
+    def setUp(self):
+        """Creates an sqlcipher database with the enpass layout encrypted the way enpass does."""
+        self.directory = tempfile.TemporaryDirectory()
+        self.database_path = os.path.join(self.directory.name, 'vault.enpassdb')
+        salt = os.urandom(16)
+        key = hashlib.pbkdf2_hmac('sha512', self.password.encode('utf-8'), salt, self.rounds).hex()[:64]
+        self.item_key = os.urandom(32) + os.urandom(12)
+        self.uuid = str(uuid.uuid4())
+        connection = sqlite.connect(self.database_path)
+        # A raw key followed by a salt makes sqlcipher write that salt as the first 16 bytes of the file
+        connection.execute(f"PRAGMA key=\"x'{key}{salt.hex()}'\";")
+        connection.execute('PRAGMA cipher_compatibility = 3;')
+        connection.executescript(
+            'CREATE TABLE Identity (version INTEGER);'
+            'CREATE TABLE item (uuid TEXT, title TEXT, key BLOB);'
+            'CREATE TABLE itemfield (item_uuid TEXT, label TEXT, type TEXT, value TEXT, '
+            'sensitive INTEGER, hash TEXT, deleted INTEGER);'
+            'INSERT INTO Identity VALUES (6);')
+        connection.execute('INSERT INTO item VALUES (?, ?, ?);', (self.uuid, 'Mail', self.item_key))
+        connection.executemany('INSERT INTO itemfield VALUES (?, ?, ?, ?, ?, NULL, ?);',
+                               [(self.uuid, 'Password', 'password', self.encrypt('s3cret'), 1, 0),
+                                (self.uuid, 'Username', 'username', 'costas', 0, 0),
+                                (self.uuid, 'Old username', 'username', 'old', 0, 1)])
+        connection.commit()
+        connection.close()
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def encrypt(self, plaintext):
+        """Encrypts a value with the item key the way enpass stores it."""
+        cipher = AES.new(self.item_key[:32], AES.MODE_GCM, nonce=self.item_key[32:])
+        cipher.update(bytearray.fromhex(self.uuid.replace('-', '')))
+        ciphertext, tag = cipher.encrypt_and_digest(plaintext.encode('utf-8'))
+        return (ciphertext + tag).hex()
+
+    def test_entry_fields_are_loaded(self):
+        """Entries retrieved from the database carry their non deleted fields."""
+        enpass = EnpassDB(self.database_path, self.password, pbkdf2_rounds=self.rounds)
+        for entry in (enpass.get_entry('mail'), enpass.search_entries('ai')[0], enpass.entries[0]):
+            self.assertEqual(entry.password, 's3cret')
+            self.assertEqual(entry.get_field('password'), 's3cret')
+            self.assertEqual(entry.get_field('username'), 'costas')
+            self.assertEqual(entry.field_labels, ['Password', 'Username'])
+        self.assertIsNone(enpass.get_entry('missing'))

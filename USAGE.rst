@@ -52,3 +52,15 @@ To use enpassreaderlib in a project:
     # Iterate over all the entries of the database
     for entry in enpass.entries:
         print(f'{entry.title}  {entry.password}')
+
+    # Read any field of an entry by its label or its type, case insensitively
+    entry.get_field('username')
+    entry.get_field('E-mail')
+
+    # Get all the values of fields sharing a label or type, like multiple urls
+    entry.get_fields('url')
+
+    # See which fields an entry has
+    entry.field_labels
+    for field in entry.fields:
+        print(f'{field.label} ({field.type}): {field.value}')

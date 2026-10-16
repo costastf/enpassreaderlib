@@ -144,6 +144,35 @@ class EnpassDB:
         # entries are cleared so only entries with nonce are valid entries
         return [row for row in self._cursor if row["key"][32:]]
 
+    def _get_field_rows(self, rows):
+        """Retrieves the fields of the items of the rows provided grouped by item uuid.
+
+        Args:
+            rows (list): The item rows to retrieve the fields for.
+
+        Returns:
+            field_rows (dict): The field rows of each item keyed by the item uuid.
+
+        """
+        uuids = [row['uuid'] for row in rows]
+        field_rows = {}
+        # Chunked to stay well below the sqlite limit of bound parameters per query
+        chunk_size = 500
+        for index in range(0, len(uuids), chunk_size):
+            chunk = uuids[index:index + chunk_size]
+            placeholders = ', '.join('?' * len(chunk))
+            self._cursor.execute('SELECT item_uuid, label, type, value, sensitive '
+                                 'FROM itemfield '
+                                 f'WHERE deleted = 0 AND item_uuid IN ({placeholders});', chunk)
+            for field_row in self._cursor:
+                field_rows.setdefault(field_row['item_uuid'], []).append(field_row)
+        return field_rows
+
+    def _get_entries(self, query):
+        rows = self._query(query)
+        field_rows = self._get_field_rows(rows)
+        return [Entry(row, field_rows.get(row['uuid'])) for row in rows]
+
     @property
     def entries(self):
         """All the entries in the database.
@@ -152,7 +181,7 @@ class EnpassDB:
             entries (list): The password entries in the database.
 
         """
-        return [Entry(row) for row in self._query(f'{self._retrieve_all_query};')]
+        return self._get_entries(f'{self._retrieve_all_query};')
 
     def get_entry(self, name):
         """Retrieves a single entry matching the name.
@@ -165,11 +194,8 @@ class EnpassDB:
 
         """
         query = f'{self._retrieve_all_query} WHERE lower(i.title) = \"{name.lower()}\";'
-        row = next((row for row in self._query(query)),
-                   None)
-        if row is None:
-            return row
-        return Entry(row)
+        return next((entry for entry in self._get_entries(query)),
+                    None)
 
     def search_entries(self, name):
         """Retrieves any entry that matches the name provided (fuzzy matching).
@@ -182,13 +208,13 @@ class EnpassDB:
 
         """
         query = f'{self._retrieve_all_query} WHERE lower(i.title) LIKE \"%{name.lower()}%\";'
-        return [Entry(row) for row in self._query(query)]
+        return self._get_entries(query)
 
 
 class Entry:
     """Models a password entry and exposes some useful attributes about it."""
 
-    def __init__(self, database_row):
+    def __init__(self, database_row, field_rows=None):
         # The key object is saved in binary from and actually consists of the
         # AES key (32 bytes) and a nonce (12 bytes) for GCM
         self.key = database_row["key"][:32]
@@ -201,6 +227,50 @@ class Entry:
         self._totp = database_row["totp_value"]
         self.header = self.uuid.replace("-", "")
         self._password = None
+        self.fields = [Field(self, field_row) for field_row in field_rows or []]
+
+    @property
+    def field_labels(self):
+        """The labels of the fields of the entry.
+
+        Returns:
+            field_labels (list): The labels of all the fields of the entry.
+
+        """
+        return [field.label for field in self.fields]
+
+    def _match_fields(self, name):
+        name = name.lower()
+        by_label = [field for field in self.fields if (field.label or '').lower() == name]
+        return by_label or [field for field in self.fields if (field.type or '').lower() == name]
+
+    def get_field(self, name):
+        """Retrieves the value of a field of the entry by its label or type.
+
+        Fields are matched case insensitively on their label first and on their type if no label matches.
+
+        Args:
+            name: The label or type of the field to retrieve.
+
+        Returns:
+            value (str): The plaintext value of the first matching field if match found else None.
+
+        """
+        return next((field.value for field in self._match_fields(name)), None)
+
+    def get_fields(self, name):
+        """Retrieves the values of all the fields of the entry matching a label or type.
+
+        Fields are matched case insensitively on their label first and on their type if no label matches.
+
+        Args:
+            name: The label or type of the fields to retrieve.
+
+        Returns:
+            values (list): The plaintext values of all the matching fields.
+
+        """
+        return [field.value for field in self._match_fields(name)]
 
     @property
     def password(self):
@@ -242,3 +312,27 @@ class Entry:
     @property
     def totp_seed(self):
         return self._totp
+
+
+class Field:
+    """Models a field of a password entry and exposes its plaintext value."""
+
+    def __init__(self, entry, field_row):
+        self._entry = entry
+        self.label = field_row["label"]
+        self.type = field_row["type"]
+        self.sensitive = bool(field_row["sensitive"])
+        self._raw_value = field_row["value"]
+        self._value = None
+
+    @property
+    def value(self):
+        """The plaintext value of the field.
+
+        Returns:
+            value (text): The plaintext value of the field, decrypted if the field is sensitive.
+
+        """
+        if self._value is None:
+            self._value = self._entry._decrypt(self._raw_value) if self.sensitive else self._raw_value  # noqa
+        return self._value

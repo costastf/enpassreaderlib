@@ -31,7 +31,7 @@ Import all parts from enpassreaderlib here
 .. _Google Python Style Guide:
    http://google.github.io/styleguide/pyguide.html
 """
-from enpassreaderlib.enpassreaderlib import EnpassDB
+from enpassreaderlib.enpassreaderlib import EnpassDB, Entry, Field
 from ._version import __version__
 
 __author__ = '''Costas Tyfoxylos <costas.tyf@gmail.com>'''
@@ -47,3 +47,5 @@ __status__ = '''Development'''  # "Prototype", "Development", "Production".
 assert __version__
 
 assert EnpassDB
+assert Entry
+assert Field

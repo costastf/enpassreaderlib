@@ -33,11 +33,16 @@ Tests for `enpassreaderlib` module.
 
 """
 
+import os
 import tempfile
+import uuid
+from unittest import TestCase
 
 from betamax.fixtures import unittest
+from Crypto.Cipher import AES
 
 from enpassreaderlib import EnpassDB
+from enpassreaderlib.enpassreaderlib import Entry
 from enpassreaderlib.enpassreaderlibexceptions import EnpassDatabaseError
 
 __author__ = '''Costas Tyfoxylos <costas.tyf@gmail.com>'''
@@ -76,3 +81,39 @@ class TestEnpassreaderlib(unittest.BetamaxTestCase):
             database.flush()
             with self.assertRaises(EnpassDatabaseError):
                 EnpassDB(database.name, 'password', pbkdf2_rounds=1)
+
+
+class TestEntry(TestCase):
+
+    def setUp(self):
+        """Creates an item key and uuid the way enpass stores them."""
+        self.key = os.urandom(32)
+        self.nonce = os.urandom(12)
+        self.uuid = str(uuid.uuid4())
+
+    def encrypt(self, plaintext):
+        """Encrypts a value the way enpass stores it, hex of ciphertext followed by the tag."""
+        cipher = AES.new(self.key, AES.MODE_GCM, nonce=self.nonce)
+        cipher.update(bytearray.fromhex(self.uuid.replace('-', '')))
+        ciphertext, tag = cipher.encrypt_and_digest(plaintext.encode('utf-8'))
+        return (ciphertext + tag).hex()
+
+    def row(self, password_value):
+        """Builds a row as returned by the entries query."""
+        return {'key': self.key + self.nonce,
+                'title': 'title',
+                'uuid': self.uuid,
+                'password_value': password_value,
+                'password_value_hash': None,
+                'totp_value': None,
+                'totp_value_hash': None}
+
+    def test_password_is_decrypted(self):
+        """The password of an entry is decrypted with the key of the entry."""
+        entry = Entry(self.row(self.encrypt('s3cret pässword')))
+        self.assertEqual(entry.password, 's3cret pässword')
+
+    def test_missing_password_is_none(self):
+        """An entry without a password returns None."""
+        entry = Entry(self.row(None))
+        self.assertIsNone(entry.password)

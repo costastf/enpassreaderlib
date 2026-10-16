@@ -211,20 +211,33 @@ class Entry:
 
         """
         if self._password is None:
-            # The value object holds the ciphertext (same length as plaintext) +
-            # (authentication) tag (16 bytes) and is stored in hex
-            try:
-                ciphertext = bytearray.fromhex(self._password_value[:len(self._password_value) - 32])
-            except TypeError:
+            if self._password_value is None:
                 LOGGER.warning(f'Entry with title :{self.title} and '
                                f'uuid :{self.uuid} does not seem to have a password.')
                 return None
-            # Now we can initialize, decrypt the ciphertext and verify the AAD.
-            # You can compare the SHA-1 output with the value stored in the db
-            cipher = AES.new(self.key, AES.MODE_GCM, nonce=self.nonce)
-            cipher.update(bytearray.fromhex(self.header))
-            self._password = cipher.decrypt(ciphertext).decode("utf-8")
+            self._password = self._decrypt(self._password_value)
         return self._password
+
+    def _decrypt(self, value):
+        """Decrypts a value encrypted with the key of the entry.
+
+        Args:
+            value (str): The hex encoded ciphertext followed by the authentication tag.
+
+        Returns:
+            plaintext (str): The decrypted value, None if no value is provided.
+
+        """
+        if value is None:
+            return None
+        # The value object holds the ciphertext (same length as plaintext) +
+        # (authentication) tag (16 bytes) and is stored in hex
+        ciphertext = bytearray.fromhex(value[:len(value) - 32])
+        # Now we can initialize, decrypt the ciphertext and verify the AAD.
+        # You can compare the SHA-1 output with the value stored in the db
+        cipher = AES.new(self.key, AES.MODE_GCM, nonce=self.nonce)
+        cipher.update(bytearray.fromhex(self.header))
+        return cipher.decrypt(ciphertext).decode("utf-8")
 
     @property
     def totp_seed(self):

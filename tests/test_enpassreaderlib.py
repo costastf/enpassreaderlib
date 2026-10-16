@@ -225,3 +225,13 @@ class TestEnpassDBFields(TestCase):
             self.assertEqual(entry.get_field('totp'), 'JBSWY3DPEHPK3PXP')
             self.assertEqual(entry.field_labels, ['Password', 'One time code', 'Username'])
         self.assertIsNone(enpass.get_entry('missing'))
+
+    def test_names_are_not_interpreted_as_sql(self):
+        """Names containing sql or like pattern syntax are matched literally."""
+        enpass = EnpassDB(self.database_path, self.password, pbkdf2_rounds=self.rounds)
+        self.assertIsNone(enpass.get_entry('" OR "1"="1'))
+        self.assertEqual(enpass.search_entries('"'), [])
+        self.assertEqual(enpass.search_entries('" OR "1"="1'), [])
+        self.assertEqual(enpass.search_entries('%'), [])
+        self.assertEqual(enpass.search_entries('m_il'), [])
+        self.assertEqual(enpass.search_entries('\\'), [])

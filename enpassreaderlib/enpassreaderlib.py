@@ -139,8 +139,8 @@ class EnpassDB:
                                       f'The pbkdf2_rounds currently set is {self.pbkdf2_rounds}') from None
         return connection, cursor
 
-    def _query(self, query):
-        self._cursor.execute(query)
+    def _query(self, query, parameters=()):
+        self._cursor.execute(query, parameters)
         # If you deleted an item from Enpass, it stays in the database, but the
         # entries are cleared so only entries with nonce are valid entries
         return [row for row in self._cursor if row["key"][32:]]
@@ -169,8 +169,8 @@ class EnpassDB:
                 field_rows.setdefault(field_row['item_uuid'], []).append(field_row)
         return field_rows
 
-    def _get_entries(self, query):
-        rows = self._query(query)
+    def _get_entries(self, query, parameters=()):
+        rows = self._query(query, parameters)
         field_rows = self._get_field_rows(rows)
         return [Entry(row, field_rows.get(row['uuid'])) for row in rows]
 
@@ -194,8 +194,8 @@ class EnpassDB:
             entry (Entry): A password entry object if match found else None.
 
         """
-        query = f'{self._retrieve_all_query} WHERE lower(i.title) = \"{name.lower()}\";'
-        return next((entry for entry in self._get_entries(query)),
+        query = f'{self._retrieve_all_query} WHERE lower(i.title) = ?;'
+        return next((entry for entry in self._get_entries(query, (name.lower(),))),
                     None)
 
     def search_entries(self, name):
@@ -208,8 +208,10 @@ class EnpassDB:
             entries (list): A list of password entries matching the fuzzy search for the given name.
 
         """
-        query = f'{self._retrieve_all_query} WHERE lower(i.title) LIKE \"%{name.lower()}%\";'
-        return self._get_entries(query)
+        # Escape the like wildcards so the name is matched literally
+        pattern = name.lower().replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+        query = f"{self._retrieve_all_query} WHERE lower(i.title) LIKE ? ESCAPE '\\';"
+        return self._get_entries(query, (f'%{pattern}%',))
 
 
 class Entry:

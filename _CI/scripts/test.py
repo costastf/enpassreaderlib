@@ -52,7 +52,7 @@ def test():
     try:
         open_file(os.path.join('test-output', 'coverage', 'index.html'))
         sleep(0.5)
-        open_file(os.path.join('test-output', 'nosetests.html'))
+        open_file(os.path.join('test-output', 'report.html'))
     except Exception:
         LOGGER.warning('Could not execute UI portion. Maybe running headless?')
     if success:

@@ -33,7 +33,12 @@ Tests for `enpassreaderlib` module.
 
 """
 
+import tempfile
+
 from betamax.fixtures import unittest
+
+from enpassreaderlib import EnpassDB
+from enpassreaderlib.enpassreaderlibexceptions import EnpassDatabaseError
 
 __author__ = '''Costas Tyfoxylos <costas.tyf@gmail.com>'''
 __docformat__ = '''google'''
@@ -63,3 +68,11 @@ class TestEnpassreaderlib(unittest.BetamaxTestCase):
         This is where you should tear down what you've setup in setUp before. This method is called after every test.
         """
         pass
+
+    def test_invalid_database_raises(self):
+        """A file that is not an enpass database raises EnpassDatabaseError."""
+        with tempfile.NamedTemporaryFile(suffix='.db') as database:
+            database.write(b'not an enpass database' * 64)
+            database.flush()
+            with self.assertRaises(EnpassDatabaseError):
+                EnpassDB(database.name, 'password', pbkdf2_rounds=1)

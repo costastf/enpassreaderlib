@@ -30,12 +30,12 @@ import shutil
 import sys
 import stat
 import tempfile
+import tomllib
 import warnings
 from contextlib import contextmanager
 from dataclasses import field
 from subprocess import Popen, PIPE, check_output, CalledProcessError
 
-from pipenv.project import Project
 from configuration import LOGGERS_TO_DISABLE, ENVIRONMENT_VARIABLES, LOGGING_LEVEL
 
 # Provides possible python2.7 compatibility, not really a goal
@@ -417,10 +417,13 @@ def clean_up(items, on_error=on_error):
 
 
 def get_top_level_dependencies():
-    pip_packages = Project().parsed_pipfile.get('packages', {}).items()
+    pipfile_location = os.path.join(get_venv_parent_path(), 'Pipfile')
+    with open(pipfile_location, 'rb') as pipfile:
+        parsed_pipfile = tomllib.load(pipfile)
+    pip_packages = parsed_pipfile.get('packages', {}).items()
     packages = [Package(name_, version_) if isinstance(version_, str) else Package(name_, **version_)
                 for name_, version_ in pip_packages]
-    pip_dev_packages = Project().parsed_pipfile.get('dev-packages', {}).items()
+    pip_dev_packages = parsed_pipfile.get('dev-packages', {}).items()
     dev_packages =[Package(name_, version_) if isinstance(version_, str) else Package(name_, **version_)
                    for name_, version_ in pip_dev_packages]
     LOGGER.debug(f'Packages in Pipfile: {packages}')
@@ -569,13 +572,13 @@ class Pushd(object):
 
 def update_pipfile(stdout: bool):
     import toml
-    project = Project()
-    LOGGER.debug(f"Processing {project.pipfile_location}")
+    pipfile_location = os.path.join(get_venv_parent_path(), 'Pipfile')
+    LOGGER.debug(f"Processing {pipfile_location}")
 
     top_level_packages, top_level_dev_packages = get_top_level_dependencies()
     all_packages, all_dev_packages = get_all_packages()
 
-    pipfile = toml.load(project.pipfile_location)
+    pipfile = toml.load(pipfile_location)
     configuration = [{'section': 'packages',
                       'top_level': top_level_packages,
                       'all_packages': all_packages},
@@ -591,8 +594,8 @@ def update_pipfile(stdout: bool):
         LOGGER.debug(f'Outputting Pipfile on stdout')
         print(toml.dumps(pipfile))
     else:
-        LOGGER.debug(f'Outputting Pipfile top {project.pipfile_location}')
-        with open(project.pipfile_location, 'w') as writer:
+        LOGGER.debug(f'Outputting Pipfile top {pipfile_location}')
+        with open(pipfile_location, 'w') as writer:
             writer.write(toml.dumps(pipfile))
 
     return True

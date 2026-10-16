@@ -61,3 +61,9 @@ History
 ------------------
 
 * Remove debugging logging.
+
+
+0.3.0 (16-10-2026)
+------------------
+
+* Exposed more fields of an entry. Bumped minimum python version and dependencies.

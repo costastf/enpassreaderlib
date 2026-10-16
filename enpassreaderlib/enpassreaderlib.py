@@ -81,9 +81,10 @@ class EnpassDB:
                 'if_password.value as password_value, '
                 'if_password.hash as password_value_hash, '
                 'if_totp.value as totp_value, '
-                'if_totp.hash as totp_value_hash '
+                'if_totp.hash as totp_value_hash, '
+                'if_totp.sensitive as totp_value_sensitive '
                 'FROM item i ' + ''.join([(f'LEFT JOIN '
-                                           f'(SELECT item_uuid, type, value, hash '
+                                           f'(SELECT item_uuid, type, value, hash, sensitive '
                                            f'FROM itemfield WHERE type = "{type_}") if_{type_} '
                                            f'ON i.uuid = if_{type_}.item_uuid ') for type_ in field_types]))
 
@@ -224,7 +225,9 @@ class Entry:
         self._password_hash = database_row["password_value_hash"]
         self.uuid = database_row["uuid"]
         self._totp_hash = database_row["totp_value_hash"]
-        self._totp = database_row["totp_value"]
+        self._totp_value = database_row["totp_value"]
+        self._totp_sensitive = bool(database_row["totp_value_sensitive"])
+        self._totp = None
         self.header = self.uuid.replace("-", "")
         self._password = None
         self.fields = [Field(self, field_row) for field_row in field_rows or []]
@@ -311,6 +314,14 @@ class Entry:
 
     @property
     def totp_seed(self):
+        """The plaintext totp seed of the entry.
+
+        Returns:
+            totp_seed (text): The plaintext totp seed of the entry, decrypted if the field is sensitive.
+
+        """
+        if self._totp is None:
+            self._totp = self._decrypt(self._totp_value) if self._totp_sensitive else self._totp_value
         return self._totp
 
 

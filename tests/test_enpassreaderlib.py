@@ -100,15 +100,16 @@ class TestEntry(TestCase):
         ciphertext, tag = cipher.encrypt_and_digest(plaintext.encode('utf-8'))
         return (ciphertext + tag).hex()
 
-    def row(self, password_value):
+    def row(self, password_value, totp_value=None, totp_sensitive=0):
         """Builds a row as returned by the entries query."""
         return {'key': self.key + self.nonce,
                 'title': 'title',
                 'uuid': self.uuid,
                 'password_value': password_value,
                 'password_value_hash': None,
-                'totp_value': None,
-                'totp_value_hash': None}
+                'totp_value': totp_value,
+                'totp_value_hash': None,
+                'totp_value_sensitive': totp_sensitive}
 
     def test_password_is_decrypted(self):
         """The password of an entry is decrypted with the key of the entry."""
@@ -119,6 +120,21 @@ class TestEntry(TestCase):
         """An entry without a password returns None."""
         entry = Entry(self.row(None))
         self.assertIsNone(entry.password)
+
+    def test_sensitive_totp_seed_is_decrypted(self):
+        """A totp seed stored in a sensitive field is decrypted with the key of the entry."""
+        entry = Entry(self.row(None, self.encrypt('JBSWY3DPEHPK3PXP'), totp_sensitive=1))
+        self.assertEqual(entry.totp_seed, 'JBSWY3DPEHPK3PXP')
+
+    def test_plain_totp_seed_is_returned_as_is(self):
+        """A totp seed stored in a non sensitive field is returned unchanged."""
+        entry = Entry(self.row(None, 'JBSWY3DPEHPK3PXP'))
+        self.assertEqual(entry.totp_seed, 'JBSWY3DPEHPK3PXP')
+
+    def test_missing_totp_seed_is_none(self):
+        """An entry without a totp seed returns None."""
+        entry = Entry(self.row(None))
+        self.assertIsNone(entry.totp_seed)
 
     def field_row(self, label, type_, value, sensitive=False):
         """Builds a row as returned by the fields query."""
@@ -182,6 +198,7 @@ class TestEnpassDBFields(TestCase):
         connection.execute('INSERT INTO item VALUES (?, ?, ?);', (self.uuid, 'Mail', self.item_key))
         connection.executemany('INSERT INTO itemfield VALUES (?, ?, ?, ?, ?, NULL, ?);',
                                [(self.uuid, 'Password', 'password', self.encrypt('s3cret'), 1, 0),
+                                (self.uuid, 'One time code', 'totp', self.encrypt('JBSWY3DPEHPK3PXP'), 1, 0),
                                 (self.uuid, 'Username', 'username', 'costas', 0, 0),
                                 (self.uuid, 'Old username', 'username', 'old', 0, 1)])
         connection.commit()
@@ -204,5 +221,7 @@ class TestEnpassDBFields(TestCase):
             self.assertEqual(entry.password, 's3cret')
             self.assertEqual(entry.get_field('password'), 's3cret')
             self.assertEqual(entry.get_field('username'), 'costas')
-            self.assertEqual(entry.field_labels, ['Password', 'Username'])
+            self.assertEqual(entry.totp_seed, 'JBSWY3DPEHPK3PXP')
+            self.assertEqual(entry.get_field('totp'), 'JBSWY3DPEHPK3PXP')
+            self.assertEqual(entry.field_labels, ['Password', 'One time code', 'Username'])
         self.assertIsNone(enpass.get_entry('missing'))
